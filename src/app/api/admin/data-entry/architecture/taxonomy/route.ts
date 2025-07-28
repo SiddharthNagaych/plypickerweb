@@ -1,3 +1,4 @@
+// app/api/admin/architecture/taxonomy/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import mongoose from "mongoose";
 import { z } from "zod";
@@ -11,6 +12,8 @@ const allowedCities = ["Pune", "Mumbai", "Navi Mumbai"] as const;
 const BaseWithCity = z.object({
   name: z.string(),
   city: z.enum(allowedCities),
+  image: z.string().optional(),
+  order: z.number().optional(),
 });
 
 const CategorySchema = BaseWithCity;
@@ -77,6 +80,37 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Unknown error" },
       { status: 400 }
+    );
+  }
+}
+
+export async function GET(req: NextRequest) {
+  await mongooseConnect();
+
+  const { searchParams } = new URL(req.url);
+  const city = searchParams.get("city") as typeof allowedCities[number] | null;
+
+  if (!city || !allowedCities.includes(city)) {
+    return NextResponse.json(
+      { error: "Valid city parameter is required" },
+      { status: 400 }
+    );
+  }
+
+  try {
+    const categories = await ArchitectureCategory.find({ city }).sort({ order: 1 });
+    const subcategories = await ArchitectureSubcategory.find({ city })
+      .populate("category")
+      .sort({ order: 1 });
+
+    return NextResponse.json({
+      categories,
+      subcategories,
+    });
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Unknown error" },
+      { status: 500 }
     );
   }
 }

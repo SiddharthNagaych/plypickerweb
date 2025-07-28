@@ -1,28 +1,27 @@
+// app/api/admin/services/taxonomy/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import mongoose from "mongoose";
 import { z } from "zod";
 import { mongooseConnect } from "@/lib/mongooseConnect";
 
-// Models for services
 import ServiceCategory from "@/models/services/ServiceCategory";
 import ServiceSubcategory from "@/models/services/ServiceSubCategory";
 
-// City support
 const allowedCities = ["Pune", "Mumbai", "Navi Mumbai"] as const;
 
-// Zod schemas
 const BaseWithCity = z.object({
   name: z.string(),
   city: z.enum(allowedCities),
+  image: z.string().optional(),
+  order: z.number().optional(),
 });
 
 const CategorySchema = BaseWithCity;
 
 const SubcategorySchema = BaseWithCity.extend({
-  category: z.string(), // parent category ID
+  category: z.string(), // parent ServiceCategory _id
 });
 
-// Schema maps
 const schemas = {
   category: CategorySchema.array(),
   subcategory: SubcategorySchema.array(),
@@ -33,7 +32,6 @@ const models = {
   subcategory: ServiceSubcategory,
 };
 
-// Types
 type SchemaTypeMap = {
   category: z.infer<typeof CategorySchema>;
   subcategory: z.infer<typeof SubcategorySchema>;
@@ -42,7 +40,7 @@ type SchemaTypeMap = {
 type TypeKey = keyof SchemaTypeMap;
 
 export async function POST(req: NextRequest) {
-   await mongooseConnect();
+  await mongooseConnect();
 
   const body = (await req.json()) as {
     type: TypeKey;
@@ -82,6 +80,37 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Unknown error" },
       { status: 400 }
+    );
+  }
+}
+
+export async function GET(req: NextRequest) {
+  await mongooseConnect();
+
+  const { searchParams } = new URL(req.url);
+  const city = searchParams.get("city") as typeof allowedCities[number] | null;
+
+  if (!city || !allowedCities.includes(city)) {
+    return NextResponse.json(
+      { error: "Valid city parameter is required" },
+      { status: 400 }
+    );
+  }
+
+  try {
+    const categories = await ServiceCategory.find({ city }).sort({ order: 1 });
+    const subcategories = await ServiceSubcategory.find({ city })
+      .populate("category")
+      .sort({ order: 1 });
+
+    return NextResponse.json({
+      categories,
+      subcategories,
+    });
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Unknown error" },
+      { status: 500 }
     );
   }
 }

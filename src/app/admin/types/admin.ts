@@ -59,7 +59,7 @@ export const CategorySchema = z.object({
 export const SubcategorySchema = z.object({
   name: z.string().min(1, "Name is required"),
   category: z.string().min(1, "Category is required"),
-  category_image: z.string().url().optional().or(z.literal("")),
+  image: z.string().url().optional().or(z.literal("")),
   city: CityEnum,
 });
 

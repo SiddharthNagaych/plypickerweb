@@ -25,6 +25,7 @@ import {
   SubgroupSchema,
   BrandSchema,
 } from "./types/admin";
+import TaxonomyManager from "@/components/admin/data-entry/TaxonomyManager";
 
 // Type definitions
 
@@ -57,8 +58,259 @@ export default function AdminPanel() {
     brands: [],
   });
 
+  function CouponCreateForm({ taxonomy }: { taxonomy: Taxonomy }) {
+    const form = useForm({
+      defaultValues: {
+        code: "",
+        discount: 0,
+        type: "percentage",
+        minOrder: 0,
+        validUntil: "",
+        assignedTo: "",
+        category: "",
+        subcategory: "",
+        group: "",
+        subgroup: "",
+        phoneNumbers: "", // Add this line
+      },
+    });
+
+    const {
+      register,
+      handleSubmit,
+      watch,
+      reset,
+      formState: { errors },
+    } = form;
+
+    const selectedCategory = watch("category");
+    const selectedSubcategory = watch("subcategory");
+
+    const onSubmit = async (data: any) => {
+      const payload = {
+        ...data,
+        phoneNumbers: data.phoneNumbers.split(",").map((p: string) => p.trim()),
+      };
+
+      const res = await fetch("/api/profile/coupons", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const result = await res.json();
+      if (res.ok) {
+        alert("Coupon created!");
+        reset();
+      } else {
+        alert(result.error || "Failed to create coupon");
+      }
+    };
+
+    return (
+      <form
+        onSubmit={handleSubmit(onSubmit)}
+        className="bg-white border p-4 rounded space-y-4 shadow"
+      >
+        <h2 className="text-xl font-semibold text-orange-600">Create Coupon</h2>
+        <div className="grid grid-cols-2 gap-4">
+          <input
+            {...register("code")}
+            placeholder="Coupon Code"
+            className="border p-2 rounded"
+          />
+          <input
+            type="number"
+            {...register("discount")}
+            placeholder="Discount Value"
+            className="border p-2 rounded"
+          />
+          <select {...register("type")} className="border p-2 rounded">
+            <option value="percentage">Percentage</option>
+            <option value="fixed">Fixed</option>
+          </select>
+          <input
+            type="number"
+            {...register("minOrder")}
+            placeholder="Min Order Amount"
+            className="border p-2 rounded"
+          />
+          <input
+            type="date"
+            {...register("validUntil")}
+            className="border p-2 rounded"
+          />
+          <input
+            {...register("phoneNumbers")}
+            placeholder="Mobile Numbers (comma separated)"
+            className="border p-2 rounded"
+          />
+
+          <select {...register("category")} className="border p-2 rounded">
+            <option value="">Select Category</option>
+            {taxonomy.categories.map((cat) => (
+              <option key={cat._id} value={cat._id}>
+                {cat.name}
+              </option>
+            ))}
+          </select>
+          <select {...register("subcategory")} className="border p-2 rounded">
+            <option value="">(Optional) Select Subcategory</option>
+            {taxonomy.subcategories
+              .filter((s) => s.category === selectedCategory)
+              .map((s) => (
+                <option key={s._id} value={s._id}>
+                  {s.name}
+                </option>
+              ))}
+          </select>
+          <select {...register("group")} className="border p-2 rounded">
+            <option value="">(Optional) Select Group</option>
+            {taxonomy.groups
+              .filter((g) => g.subcategory === selectedSubcategory)
+              .map((g) => (
+                <option key={g._id} value={g._id}>
+                  {g.name}
+                </option>
+              ))}
+          </select>
+          <select {...register("subgroup")} className="border p-2 rounded">
+            <option value="">(Optional) Select Subgroup</option>
+            {taxonomy.subgroups
+              .filter((sg) => sg.group === watch("group"))
+              .map((sg) => (
+                <option key={sg._id} value={sg._id}>
+                  {sg.name}
+                </option>
+              ))}
+          </select>
+        </div>
+
+        <button
+          type="submit"
+          className="bg-green-600 text-white px-4 py-2 rounded"
+        >
+          Create Coupon
+        </button>
+      </form>
+    );
+  }
+
+  function PCashCreditForm() {
+    const form = useForm({
+      defaultValues: {
+        phoneNumbers: "", // comma-separated phone numbers (required)
+        amount: "",
+        reason: "",
+        expiresAt: "", // ISO string or blank
+      },
+    });
+
+    const {
+      register,
+      handleSubmit,
+      reset,
+      formState: { errors },
+    } = form;
+
+    const onSubmit = async (data: any) => {
+      // Validate at least one phone number is provided
+      if (!data.phoneNumbers.trim()) {
+        alert("Please enter at least one phone number");
+        return;
+      }
+
+      const payload = {
+        phoneNumbers: data.phoneNumbers.split(",").map((p: string) => p.trim()),
+        amount: Number(data.amount),
+        reason: data.reason,
+        expiresAt: data.expiresAt || undefined,
+      };
+
+      try {
+        const res = await fetch("/api/profile/pcash", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        const result = await res.json();
+        if (res.ok) {
+          alert(`PCash credited to ${payload.phoneNumbers.length} user(s)!`);
+          reset();
+        } else {
+          alert(result.error || "Failed to credit PCash");
+        }
+      } catch (error) {
+        console.error("PCash credit error:", error);
+        alert("Failed to connect to server");
+      }
+    };
+
+    return (
+      <form
+        onSubmit={handleSubmit(onSubmit)}
+        className="bg-white border p-4 rounded space-y-4 shadow"
+      >
+        <h2 className="text-xl font-semibold text-orange-600">Credit PCash</h2>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="col-span-2">
+            <input
+              {...register("phoneNumbers", { required: true })}
+              placeholder="Mobile Numbers (comma separated)"
+              className={clsx(
+                "border p-2 rounded w-full",
+                errors.phoneNumbers && "border-red-500"
+              )}
+            />
+            <p className="text-sm text-gray-500 mt-1">
+              Enter one or more phone numbers separated by commas
+            </p>
+          </div>
+
+          <input
+            type="number"
+            {...register("amount", { required: true, min: 1 })}
+            placeholder="Amount (₹)"
+            className={clsx(
+              "border p-2 rounded",
+              errors.amount && "border-red-500"
+            )}
+          />
+
+          <select
+            {...register("reason", { required: true })}
+            className={clsx(
+              "border p-2 rounded",
+              errors.reason && "border-red-500"
+            )}
+          >
+            <option value="">Select Reason</option>
+            <option value="return_refund">Return / Refund</option>
+            <option value="referral">Referral</option>
+            <option value="promotion">Promotion</option>
+            <option value="other">Other</option>
+          </select>
+
+          <input
+            type="date"
+            {...register("expiresAt")}
+            className="border p-2 rounded"
+            min={new Date().toISOString().split("T")[0]} // Today's date
+          />
+        </div>
+        <button
+          type="submit"
+          className="bg-green-600 text-white px-4 py-2 rounded"
+        >
+          Credit PCash
+        </button>
+      </form>
+    );
+  }
+
   const refetchTaxonomy = useCallback(async () => {
-    const res = await fetch(`/api/admin/taxonomy?city=${city}`);
+    const res = await fetch(`/api/admin/data-entry/taxonomy?city=${city}`);
     const data: Taxonomy = await res.json();
     setTaxonomy(data);
   }, [city]);
@@ -109,12 +361,20 @@ export default function AdminPanel() {
         taxonomy={taxonomy}
         onUploaded={refetchTaxonomy}
       />
+       {/* Service Taxonomy Management */}
+      <TaxonomyManager city={city} type="service" />
+
+      {/* Architecture Taxonomy Management */}
+      <TaxonomyManager city={city} type="architecture" />
+
 
       {/* Architecture Quote Form */}
       <ArchitectureForm city={city} onSaved={refetchTaxonomy} />
 
       {/* Service Entry Form */}
       <ServiceForm city={city} onSaved={refetchTaxonomy} />
+      <PCashCreditForm />
+      <CouponCreateForm taxonomy={taxonomy} />
     </div>
   );
 }
@@ -141,7 +401,7 @@ function CategoryForm({ city }: { city: City; taxonomy: Taxonomy }) {
 
   const onSubmit: SubmitHandler<CategoryFormData> = async (data) => {
     const payload = { type: "category", items: [data] };
-    const res = await post("/api/admin/taxonomyBulk", payload);
+    const res = await post("/api/admin/data-entry/taxonomyBulk", payload);
     if (res.ok) {
       alert("Category saved!");
       form.reset({ city, name: "", category_image: "" });
@@ -194,7 +454,7 @@ function SubcategoryForm({
 }) {
   const form = useForm<SubcategoryFormData>({
     resolver: zodResolver(SubcategorySchema),
-    defaultValues: { city, name: "", category: "", category_image: "" },
+    defaultValues: { city, name: "", category: "", image: "" },
   });
 
   const {
@@ -212,10 +472,10 @@ function SubcategoryForm({
 
   const onSubmit: SubmitHandler<SubcategoryFormData> = async (data) => {
     const payload = { type: "subcategory", items: [data] };
-    const res = await post("/api/admin/taxonomyBulk", payload);
+    const res = await post("/api/admin/data-entry/taxonomyBulk", payload);
     if (res.ok) {
       alert("Subcategory saved!");
-      form.reset({ city, name: "", category: "", category_image: "" });
+      form.reset({ city, name: "", category: "", image: "" });
     } else {
       alert(res.error || "An error occurred");
     }
@@ -251,7 +511,7 @@ function SubcategoryForm({
           ))}
         </select>
         <input
-          {...register("category_image")}
+          {...register("image")}
           placeholder="Image URL (optional)"
           className="border p-2 rounded"
         />
@@ -298,7 +558,7 @@ function GroupForm({ city, taxonomy }: { city: City; taxonomy: Taxonomy }) {
 
   const onSubmit: SubmitHandler<GroupFormData> = async (data) => {
     const payload = { type: "group", items: [data] };
-    const res = await post("/api/admin/taxonomyBulk", payload);
+    const res = await post("/api/admin/data-entry/taxonomyBulk", payload);
     if (res.ok) {
       alert("Group saved!");
       form.reset({
@@ -402,7 +662,7 @@ function SubgroupForm({ city, taxonomy }: { city: City; taxonomy: Taxonomy }) {
 
   const onSubmit: SubmitHandler<SubgroupFormData> = async (data) => {
     const payload = { type: "subgroup", items: [data] };
-    const res = await post("/api/admin/taxonomyBulk", payload);
+    const res = await post("/api/admin/data-entry/taxonomyBulk", payload);
     if (res.ok) {
       alert("Subgroup saved!");
       form.reset({
@@ -508,7 +768,7 @@ function BrandForm({ city, taxonomy }: { city: City; taxonomy: Taxonomy }) {
 
   const onSubmit: SubmitHandler<BrandFormData> = async (data) => {
     const payload = { type: "brand", items: [data] };
-    const res = await post("/api/admin/taxonomyBulk", payload);
+    const res = await post("/api/admin/data-entry/taxonomyBulk", payload);
     if (res.ok) {
       alert("Brand saved!");
       form.reset({ city, Brand_name: "", Category: "" });

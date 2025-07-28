@@ -1,18 +1,27 @@
-
 import mongoose, { Schema, Document, model, models } from "mongoose";
 
 export interface IAddress extends Document {
   userId: mongoose.Types.ObjectId;
   name: string;
   phone: string;
-  type: 'HOME' | 'OFFICE' | 'OTHER';
+  addressType?: 'SHIPPING' | 'BILLING' | 'BOTH';
+  locationType?: 'HOME' | 'OFFICE' | 'OTHER';
   addressLine1: string;
+  addressLine2?: string;
+  landmark?: string;
   city: string;
   state: string;
   pincode: string;
   country: string;
-  isDefault: boolean;
-  isActive: boolean;
+  coordinates?: {
+    lat: number;
+    lng: number;
+  };
+  distanceFromCenter?: number; // in km
+  isDefault?: boolean;
+  isActive?: boolean;
+  companyName?: string; // For GST/business addresses
+  gstNumber?: string;  // For GST invoices
 }
 
 const AddressSchema = new Schema<IAddress>(
@@ -32,7 +41,12 @@ const AddressSchema = new Schema<IAddress>(
       required: true,
       match: [/^[6-9]\d{9}$/, 'Please enter a valid phone number']
     },
-    type: {
+    addressType: {
+      type: String,
+      enum: ['SHIPPING', 'BILLING', 'BOTH'],
+      default: 'SHIPPING'
+    },
+    locationType: {
       type: String,
       enum: ['HOME', 'OFFICE', 'OTHER'],
       default: 'HOME'
@@ -42,7 +56,14 @@ const AddressSchema = new Schema<IAddress>(
       required: true,
       trim: true 
     },
-
+    addressLine2: { 
+      type: String, 
+      trim: true 
+    },
+    landmark: {
+      type: String,
+      trim: true
+    },
     city: { 
       type: String, 
       required: true,
@@ -63,6 +84,25 @@ const AddressSchema = new Schema<IAddress>(
       default: 'India',
       trim: true 
     },
+    coordinates: {
+      type: {
+        lat: Number,
+        lng: Number
+      },
+      _id: false
+    },
+    distanceFromCenter: {
+      type: Number  // Distance in kilometers from city center
+    },
+    companyName: {
+      type: String,
+      trim: true
+    },
+    gstNumber: {
+      type: String,
+      trim: true,
+      match: [/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/, 'Please enter a valid GST number']
+    },
     isDefault: { 
       type: Boolean, 
       default: false 
@@ -75,21 +115,43 @@ const AddressSchema = new Schema<IAddress>(
   { timestamps: true }
 );
 
-// Fixed pre-save hook with proper typing
+// Pre-save hook: reset isDefault for other addresses of same type
 AddressSchema.pre('save', async function(next) {
   if (this.isDefault) {
-    // Use proper model reference
     const AddressModel = this.constructor as mongoose.Model<IAddress>;
     await AddressModel.updateMany(
-      { userId: this.userId, _id: { $ne: this._id } },
+      { 
+        userId: this.userId, 
+        addressType: this.addressType,
+        _id: { $ne: this._id } 
+      },
+      { isDefault: false }
+    );
+  }
+  
+  // If address is BOTH type, ensure we don't have separate entries
+  if (this.addressType === 'BOTH') {
+    const AddressModel = this.constructor as mongoose.Model<IAddress>;
+    await AddressModel.updateMany(
+      {
+        userId: this.userId,
+        $or: [
+          { addressType: 'SHIPPING', isDefault: true },
+          { addressType: 'BILLING', isDefault: true }
+        ],
+        _id: { $ne: this._id }
+      },
       { isDefault: false }
     );
   }
   next();
 });
 
-// Index for faster queries
+// Indexes
 AddressSchema.index({ userId: 1, isActive: 1 });
 AddressSchema.index({ userId: 1, isDefault: 1 });
+AddressSchema.index({ userId: 1, addressType: 1 });
+AddressSchema.index({ pincode: 1 });
+AddressSchema.index({ coordinates: '2dsphere' }); // For geospatial queries
 
 export default models.Address || model<IAddress>("Address", AddressSchema);

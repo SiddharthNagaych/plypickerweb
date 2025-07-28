@@ -9,7 +9,9 @@ declare module "next-auth" {
       phone?: string;
       role?: string;
       profileCompleted?: boolean;
-      // Add any other custom fields you need
+      pincode?: string;
+      gender?: string;
+      phoneVerified?: Date;
     } & DefaultSession["user"];
   }
 

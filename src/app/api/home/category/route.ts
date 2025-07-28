@@ -18,9 +18,8 @@ export async function GET(req: Request) {
     const result = [];
 
     for (const category of categories) {
-      // Use category._id instead of category.name for ObjectId fields
       const subcategories = await SubcategoryModel.find({ 
-        category: category._id, // Changed from category.name to category._id
+        category: category._id,
         city 
       });
 
@@ -28,8 +27,8 @@ export async function GET(req: Request) {
 
       for (const sub of subcategories) {
         const groups = await GroupModel.find({ 
-          category: category._id, // Changed from category.name to category._id
-          subcategory: sub._id, // Changed from sub.name to sub._id
+          category: category._id,
+          subcategory: sub._id,
           city 
         });
 
@@ -37,9 +36,9 @@ export async function GET(req: Request) {
 
         for (const group of groups) {
           const subgroups = await SubgroupModel.find({ 
-            category: category._id, // Changed from category.name to category._id
-            subcategory: sub._id, // Changed from sub.name to sub._id
-            group: group._id, // Changed from group.name to group._id
+            category: category._id,
+            subcategory: sub._id,
+            group: group._id,
             city 
           });
 
@@ -47,23 +46,32 @@ export async function GET(req: Request) {
 
           for (const subgroup of subgroups) {
             const brands = await BrandModel.find({ 
-              category: category._id, // Changed from category.name to category._id
-              subcategory: sub._id, // Changed from sub.name to sub._id
-              group: group._id, // Changed from group.name to group._id
-              subgroup: subgroup._id, // Changed from subgroup.name to subgroup._id
+              category: category._id,
+              subcategory: sub._id,
+              group: group._id,
+              subgroup: subgroup._id,
               city 
             });
 
             subgroupsWithBrands.push({
               id: subgroup._id.toString(),
               name: subgroup.name,
-              brands: brands.map((b) => ({ id: b._id.toString(), name: b.name })),
+              // Include subgroup image if available
+              image: subgroup.image || null, // Add this if your Subgroup has an image field
+              brands: brands.map((b) => ({ 
+                id: b._id.toString(), 
+                name: b.name,
+                // Include brand image if available
+                image: b.image || null // Add this if your Brand has an image field
+              })),
             });
           }
 
           groupsWithChildren.push({
             id: group._id.toString(),
             name: group.name,
+            // Include group image if available
+            image: group.image || null, // Add this if your Group has an image field
             subgroups: subgroupsWithBrands,
           });
         }
@@ -71,6 +79,8 @@ export async function GET(req: Request) {
         subcatsWithChildren.push({
           id: sub._id.toString(),
           name: sub.name,
+          // Include subcategory image if available
+          image: sub.image || null, // Make sure this matches your schema field name
           groups: groupsWithChildren,
         });
       }
@@ -78,6 +88,8 @@ export async function GET(req: Request) {
       result.push({
         id: category._id.toString(),
         name: category.name,
+        // Include category image from your schema
+        image: category.category_image || null,
         subcategories: subcatsWithChildren,
       });
     }

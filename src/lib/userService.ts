@@ -149,11 +149,16 @@ export class UserService {
       userData.gender
     );
   }
-  static async verifyOTP(phone: string, otp: string): Promise<boolean> {
-    await mongooseConnect();
-    const otpEntry = await OtpVerification.verifyOTP(phone, otp);
-    return !!otpEntry;
-  }
+ static async verifyOTP(phone: string, otp: string): Promise<boolean> {
+  await mongooseConnect();
+  console.log("[verifyOTP] Verifying OTP for:", phone, otp);
+
+  const otpEntry = await OtpVerification.verifyOTP(phone, otp);
+  console.log("[verifyOTP] OTP entry:", otpEntry);
+
+  return !!otpEntry;
+}
+
 
   static async getUserByPhone(
     phone: string

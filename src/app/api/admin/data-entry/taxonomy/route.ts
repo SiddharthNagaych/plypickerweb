@@ -1,3 +1,4 @@
+//api/admin/taxonomy
 import { mongooseConnect } from "@/lib/mongooseConnect";
 import Category from "@/models/products/Category";
 import Subcategory from "@/models/products/Subcategory";

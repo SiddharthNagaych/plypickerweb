@@ -62,27 +62,27 @@ otpVerificationSchema.statics.createOTP = async function(phone: string, metadata
 
 // Static method to verify OTP
 otpVerificationSchema.statics.verifyOTP = async function(phone: string, otp: string) {
+  console.log("[OtpVerification] Looking for valid OTP:", { phone, otp });
+
   const otpEntry = await this.findOne({
     phone,
     otp,
     verified: false,
     expiresAt: { $gt: new Date() }
   });
-  
+
   if (!otpEntry) {
-    // Increment attempts for rate limiting
-    await this.updateOne(
-      { phone, otp },
-      { $inc: { attempts: 1 } }
-    );
+    console.warn("[OtpVerification] No matching OTP entry found or expired");
+    await this.updateOne({ phone, otp }, { $inc: { attempts: 1 } });
     return null;
   }
-  
-  // Mark as verified
+
   otpEntry.verified = true;
   otpEntry.verifiedAt = new Date();
   await otpEntry.save();
-  
+
+  console.log("[OtpVerification] OTP verified successfully");
+
   return otpEntry;
 };
 

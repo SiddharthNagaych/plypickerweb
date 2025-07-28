@@ -1,106 +1,66 @@
-import mongoose, { Schema, model, models } from "mongoose";
+// models/Return.ts
+import { Schema, model, models, Types } from "mongoose";
 
-const returnSchema = new Schema({
-  orderId: {
-    type: Schema.Types.ObjectId,
-    ref: 'Order',
-    required: true,
-    index: true
-  },
-  userId: {
-    type: Schema.Types.ObjectId,
-    ref: 'User',
-    required: true,
-    index: true
-  },
-  returnItems: [{
-    cartItemId: {
-      type: String,
-      required: true
-    },
-    productId: {
-      type: Schema.Types.ObjectId, // Changed from String to ObjectId
-      ref: 'Product',
-      required: true
-    },
-    productName: {
-      type: String,
-      required: true
-    },
-    quantity: {
-      type: Number,
-      required: true,
-      min: 1
-    },
-    reason: {
-      type: String,
-      required: true
-    },
-    condition: {
-      type: String,
-      enum: ["damaged", "defective", "wrong_item", "not_as_described", "other"],
-      required: true
-    },
-    images: [String],
-    refundAmount: {
-      type: Number,
-      required: true,
-      min: 0
-    },
-    refundMethod: { // Added refund method per item
-      type: String,
-      enum: ["original", "credit"],
-      default: "original"
-    }
-  }],
-  totalRefundAmount: {
-    type: Number,
-    required: true,
-    min: 0
-  },
-  returnReason: {
+const ItemSchema = new Schema({
+  cartItemId:   { type: String, required: true },          // client row‑id
+  productId:    { type: Types.ObjectId, ref: "Product", required: true },
+  variantId:    { type: Types.ObjectId, ref: "Variant" },  // ← NEW (colour/size)
+  productName:  { type: String, required: true },
+  quantity:     { type: Number, min: 1, required: true },
+  reason:       { type: String, required: true },
+  condition:    {
     type: String,
-    required: true
+    enum: [
+      "damaged",
+      "defective",
+      "wrong_item",
+      "not_as_described",
+      "other",
+    ],
+    required: true,
   },
-  returnStatus: {
+  images:       [String],                                  // s3 / cloudinary urls
+  refundAmount: { type: Number, min: 0, required: true },
+  refundMethod: {
     type: String,
-    enum: ["requested", "approved", "rejected", "refunded", "partially_refunded"],
-    default: "requested",
-    index: true
+    enum: ["original", "credit"],
+    default: "original",
   },
-  requestedAt: {
-    type: Date,
-    default: Date.now
-  },
-  approvedAt: Date,
-  rejectedAt: Date,
-  rejectionReason: String,
-  refundProcessedAt: Date,
-  refundTransactionId: String,
-  refundMethod: { // Added overall refund method
-    type: String,
-    enum: ["original", "credit", "partial"],
-    default: "original"
-  },
-  plyCreditsCredited: {
-    type: Boolean,
-    default: false
-  },
-  plyCreditsAmount: Number,
-  plyCreditsCreditedAt: Date,
-  adminNotes: String,
-  processedBy: String,
-  trackingNumber: String, // Added for return shipments
-  carrier: String // Added for return shipments
-}, {
-  timestamps: true
+  itemStatus:   { type: String, enum: [
+                   "requested","approved","rejected","received","refunded"],
+                 default: "requested" },                   // ← NEW granular
 });
 
-// Add compound indexes for better query performance
-returnSchema.index({ orderId: 1, returnStatus: 1 });
-returnSchema.index({ userId: 1, returnStatus: 1 });
-returnSchema.index({ refundProcessedAt: 1 });
-returnSchema.index({ plyCreditsCredited: 1 });
+const ReturnSchema = new Schema(
+  {
+    orderId:  { type: Types.ObjectId, ref: "Order", required: true, index: true },
+    userId:   { type: Types.ObjectId, ref: "User",  required: true, index: true },
+    returnItems: [ItemSchema],
+    totalRefundAmount: { type: Number, min: 0, required: true },
+    returnReason:  { type: String, required: true },
+    returnStatus:  {
+      type: String,
+      enum: ["requested","approved","rejected","refunded","partially_refunded"],
+      default: "requested",
+      index: true,
+    },
+    logisticsLabelUrl: String,          // ← shipping label / QR
+    trackingNumber: String,
+    carrier:        String,
+    // … financial bookkeeping
+    refundProcessedAt: Date,
+    refundTransactionId: String,
+    refundMethod: { type: String, enum: ["original","credit","partial"], default:"original"},
+    // PCash
+    plyCreditsCredited: { type: Boolean, default: false },
+    plyCreditsAmount: Number,
+    plyCreditsCreditedAt: Date,
+    // metadata
+    adminNotes: String,
+    processedBy: String,
+  },
+  { timestamps: true }
+);
 
-const Return = models.Return || model("Return", returnSchema);
-export default Return;
+ReturnSchema.index({ orderId: 1, "returnItems.productId": 1 });
+export default models.Return || model("Return", ReturnSchema);

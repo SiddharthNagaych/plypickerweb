@@ -8,7 +8,7 @@ import cartReducer from './cartSlice';
 const persistConfig = {
   key: 'cart',
   storage,
-  whitelist: ['items', 'services', 'transport', 'coupon', 'selectedAddress'], // Fixed 'address' to 'selectedAddress'
+  whitelist: ['items', 'services', 'transport', 'coupon', 'selectedAddress','transportCharges'], // Fixed 'address' to 'selectedAddress'
   // Add version for migration if needed
   version: 1,
 };

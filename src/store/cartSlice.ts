@@ -1,18 +1,48 @@
-// store/cartSlice.ts
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
+import { REHYDRATE } from "redux-persist";
+
+// Define the rehydrate action type
+interface RehydrateAction {
+  type: typeof REHYDRATE;
+  payload?: {
+    cart?: CartState;
+  };
+}
+
+// Helper function for transport charge calculation
+const calculateTransportCharge = (
+  basePrice: number,
+  distanceKm: number
+): number => {
+  let charge = basePrice;
+  if (distanceKm > 20) {
+    charge += basePrice * 0.2 * (distanceKm - 20);
+  } else if (distanceKm > 10) {
+    charge += basePrice * 0.15 * (distanceKm - 10);
+  } else if (distanceKm > 5) {
+    charge += basePrice * 0.1 * (distanceKm - 5);
+  }
+  return Math.round(charge);
+};
+
+// Base transport charges (these are the minimum charges)
+const BASE_TRANSPORT_CHARGES = {
+  bike: 50,
+  three_wheeler: 150,
+  tempo: 489,
+  pickup: 613,
+};
 
 const initialState: CartState = {
   items: [],
   services: [],
-  transport: "standard",
+  transport: "bike",
   coupon: null,
   selectedAddress: null,
-  transportCharges: {
-    bike: 50,
-    three_wheeler: 150,
-    tempo: 489,
-    pickup: 613,
-  },
+    billingAddress: null, // Add this
+  transportCharges: BASE_TRANSPORT_CHARGES,
+
+  
   lastUpdated: new Date().toISOString(),
   sessionId: `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
 };
@@ -20,6 +50,56 @@ const initialState: CartState = {
 const cartSlice = createSlice({
   name: "cart",
   initialState,
+  extraReducers: (builder) => {
+    builder.addCase(REHYDRATE, (state, action: RehydrateAction) => {
+    if (action.payload?.cart) {
+      const persistedCart = action.payload.cart;
+
+      // Ensure billing address exists if using same address
+      if (persistedCart.selectedAddress && !persistedCart.billingAddress) {
+        persistedCart.billingAddress = persistedCart.selectedAddress;
+      }
+
+      // FIXED: Always recalculate transport charges if we have distance data
+      if (persistedCart.selectedAddress?.distanceFromCenter) {
+        const distance = persistedCart.selectedAddress.distanceFromCenter;
+        const recalculatedCharges = {
+          bike: calculateTransportCharge(
+            BASE_TRANSPORT_CHARGES.bike,
+            distance
+          ),
+          three_wheeler: calculateTransportCharge(
+            BASE_TRANSPORT_CHARGES.three_wheeler,
+            distance
+          ),
+          tempo: calculateTransportCharge(
+            BASE_TRANSPORT_CHARGES.tempo,
+            distance
+          ),
+          pickup: calculateTransportCharge(
+            BASE_TRANSPORT_CHARGES.pickup,
+            distance
+          ),
+        };
+
+        return {
+          ...persistedCart,
+          transportCharges: recalculatedCharges,
+          lastUpdated: new Date().toISOString(),
+        };
+      }
+
+      // FIXED: If no distance data, use the persisted charges or fall back to base charges
+      return {
+        ...persistedCart,
+        transportCharges:
+          persistedCart.transportCharges || BASE_TRANSPORT_CHARGES,
+        lastUpdated: persistedCart.lastUpdated || new Date().toISOString(),
+      };
+    }
+    return state;
+  });
+},
   reducers: {
     updateAddress: (state, action: PayloadAction<Partial<Address>>) => {
       if (!state.selectedAddress) {
@@ -42,13 +122,80 @@ const cartSlice = createSlice({
           ...action.payload,
         };
       }
+
+      // FIXED: Recalculate transport charges when address is updated
+      if (state.selectedAddress.distanceFromCenter) {
+        const distance = state.selectedAddress.distanceFromCenter;
+        state.transportCharges = {
+          bike: calculateTransportCharge(BASE_TRANSPORT_CHARGES.bike, distance),
+          three_wheeler: calculateTransportCharge(
+            BASE_TRANSPORT_CHARGES.three_wheeler,
+            distance
+          ),
+          tempo: calculateTransportCharge(
+            BASE_TRANSPORT_CHARGES.tempo,
+            distance
+          ),
+          pickup: calculateTransportCharge(
+            BASE_TRANSPORT_CHARGES.pickup,
+            distance
+          ),
+        };
+      }
+
       state.lastUpdated = new Date().toISOString();
     },
 
-    setSelectedAddress: (state, action: PayloadAction<Address | null>) => {
-      state.selectedAddress = action.payload;
+ setBillingAddress: (state, action: PayloadAction<Address | null>) => {
+      state.billingAddress = action.payload;
       state.lastUpdated = new Date().toISOString();
     },
+
+    // Update setSelectedAddress to handle same address case
+    setSelectedAddress: (state, action: PayloadAction<Address | null>) => {
+      state.selectedAddress = action.payload;
+      
+      // If billing address is null or same as shipping, update it too
+      if (!state.billingAddress || 
+          (state.billingAddress.id === state.selectedAddress?.id)) {
+        state.billingAddress = action.payload;
+      }
+
+      // Recalculate transport charges when address is set
+      if (action.payload?.distanceFromCenter) {
+        const distance = action.payload.distanceFromCenter;
+        state.transportCharges = {
+          bike: calculateTransportCharge(BASE_TRANSPORT_CHARGES.bike, distance),
+          three_wheeler: calculateTransportCharge(
+            BASE_TRANSPORT_CHARGES.three_wheeler,
+            distance
+          ),
+          tempo: calculateTransportCharge(
+            BASE_TRANSPORT_CHARGES.tempo,
+            distance
+          ),
+          pickup: calculateTransportCharge(
+            BASE_TRANSPORT_CHARGES.pickup,
+            distance
+          ),
+        };
+      } else if (!action.payload) {
+        // Reset to base charges if no address is selected
+        state.transportCharges = BASE_TRANSPORT_CHARGES;
+      }
+
+      state.lastUpdated = new Date().toISOString();
+    },
+
+    // Add this new reducer for toggling same address
+    setUseSameAddress: (state, action: PayloadAction<boolean>) => {
+      if (action.payload) {
+        // If setting to use same address, copy shipping to billing
+        state.billingAddress = state.selectedAddress;
+      }
+      state.lastUpdated = new Date().toISOString();
+    },
+  
 
     updateTransportCharges: (
       state,
@@ -74,11 +221,9 @@ const cartSlice = createSlice({
       );
 
       if (existingItem) {
-        // Update existing item quantity
         existingItem.quantity += action.payload.quantity;
         existingItem.addedAt = new Date().toISOString();
       } else {
-        // Add new item with proper defaults
         const newItem: CartItem = {
           ...action.payload,
           id: `cart_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -97,7 +242,6 @@ const cartSlice = createSlice({
       state.lastUpdated = new Date().toISOString();
     },
 
-    // FIXED: Remove the 'id' property from payload
     updateQuantity: (
       state,
       action: PayloadAction<{
@@ -114,7 +258,6 @@ const cartSlice = createSlice({
 
       if (item) {
         if (action.payload.quantity <= 0) {
-          // Remove item if quantity is 0 or less
           state.items = state.items.filter(
             (item) =>
               !(
@@ -142,13 +285,11 @@ const cartSlice = createSlice({
           )
       );
 
-      // Only update timestamp if an item was actually removed
       if (state.items.length < initialLength) {
         state.lastUpdated = new Date().toISOString();
       }
     },
 
-    // FIXED: Remove the 'id' property from payload
     toggleLabor: (
       state,
       action: PayloadAction<{
@@ -165,16 +306,14 @@ const cartSlice = createSlice({
 
       if (item) {
         item.includeLabor = action.payload.includeLabor;
-        // Set default labor floors and cost if enabling labor
         if (action.payload.includeLabor && !item.laborPerFloor) {
-          item.laborPerFloor = 300; // Default labor cost
+          item.laborPerFloor = 300;
           item.laborFloors = Math.max(1, item.laborFloors);
         }
       }
       state.lastUpdated = new Date().toISOString();
     },
 
-    // FIXED: Remove the 'id' property from payload
     updateLaborFloors: (
       state,
       action: PayloadAction<{
@@ -263,14 +402,13 @@ const cartSlice = createSlice({
       };
     },
 
-    // This action is for checking if item exists - no state mutation needed
     checkItemInCart: (
       state,
       action: PayloadAction<{ productId: string; variantIndex?: number }>
     ) => {
       // This is just a query action, doesn't modify state
-      // The actual check should be done in a selector
     },
+
   },
 });
 
@@ -318,6 +456,8 @@ export const {
   checkItemInCart,
   updateTransportCharges,
   updateAddress,
+  setBillingAddress,
+  setUseSameAddress,
 } = cartSlice.actions;
 
 export const cartActions = cartSlice.actions;

@@ -12,7 +12,7 @@ import SavedCards from "@/components/profile/SavedCards";
 import SavedUPI from "@/components/profile/SavedUPI";
 import SavedWallet from "@/components/profile/SavedWallet";
 import Addresses from "@/components/profile/Addresses";
-import HelpDeskForm from "@/components/profile/HelpTicket";
+import HelpDesk from "@/components/profile/helpdesk";
 import DeleteAccount from "@/components/profile/DeleteAccount";
 import TermsOfUse from "@/components/profile/TermOfUse";
 import PrivacyPolicy from "@/components/profile/PrivacyPolicy";
@@ -24,18 +24,11 @@ const navItems = [
   },
   {
     heading: "Orders",
-    items: [
-      { label: "Orders & Returns" },
-    
-    ],
+    items: [{ label: "Orders & Returns" }],
   },
   {
     heading: "Credits",
-    items: [
-      { label: "Coupons" },
-
-      { label: "PCash" },
-    ],
+    items: [{ label: "Coupons" }, { label: "PCash" }],
   },
   {
     heading: "Account",
@@ -51,19 +44,28 @@ const navItems = [
   },
   {
     heading: "Legal",
-    items: [
-      { label: "Terms of Use" },
-      { label: "Privacy Policy" },
-    ],
+    items: [{ label: "Terms of Use" }, { label: "Privacy Policy" }],
   },
 ];
 
 export default function ProfilePage() {
   const { data: session } = useSession();
-  const [activeSection, setActiveSection] = useState("Overview");
+
+  const [activeSection, setActiveSection] = useState<string>(
+    () => localStorage.getItem("profileTab") || "Overview"
+  );
+
+  const changeTab = (label: string) => {
+    setActiveSection(label);
+    localStorage.setItem("profileTab", label);
+  };
 
   if (!session?.user) {
-    return <div className="p-6 text-center text-gray-600">Please log in to view your profile.</div>;
+    return (
+      <div className="p-6 text-center text-gray-600">
+        Please log in to view your profile.
+      </div>
+    );
   }
 
   const { name, email, phone, image } = session.user as any;
@@ -74,12 +76,17 @@ export default function ProfilePage() {
       <aside className="hidden lg:block bg-white shadow rounded-lg p-4 space-y-6 border border-gray-200">
         {navItems.map((section) => (
           <div key={section.heading}>
-            <p className="text-xs font-semibold text-gray-400 uppercase mb-2">{section.heading}</p>
+            <p className="text-xs font-semibold text-gray-400 uppercase mb-2">
+              {section.heading}
+            </p>
             <div className="space-y-1">
-              {(section.items.length > 0 ? section.items : [{ label: "Overview" }]).map(({ label }) => (
+              {(section.items.length > 0
+                ? section.items
+                : [{ label: "Overview" }]
+              ).map(({ label }) => (
                 <button
                   key={label}
-                  onClick={() => setActiveSection(label)}
+                  onClick={() => changeTab(label)}
                   className={`flex items-center w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                     activeSection === label
                       ? "bg-orange-100 text-orange-600"
@@ -103,7 +110,11 @@ export default function ProfilePage() {
             {/* User Info */}
             <div className="flex items-center space-x-4">
               {image ? (
-                <img src={image} alt="Profile" className="w-16 h-16 rounded-full object-cover" />
+                <img
+                  src={image}
+                  alt="Profile"
+                  className="w-16 h-16 rounded-full object-cover"
+                />
               ) : (
                 <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center text-gray-600 text-lg font-semibold">
                   {name?.[0]?.toUpperCase()}
@@ -118,12 +129,14 @@ export default function ProfilePage() {
             {/* Navigation Square Cards - Responsive Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {navItems
-                .flatMap((section) => (section.items.length ? section.items : [{ label: "Overview" }]))
+                .flatMap((section) =>
+                  section.items.length ? section.items : [{ label: "Overview" }]
+                )
                 .filter(({ label }) => label !== "Overview") // Remove Overview from the cards since we're already in it
                 .map(({ label }) => (
                   <button
                     key={label}
-                    onClick={() => setActiveSection(label)}
+                    onClick={() => changeTab(label)}
                     className={`w-full h-[160px] md:h-[180px] lg:h-[200px] rounded-[4px] p-4 border border-gray-300 flex items-center justify-center text-sm font-semibold text-gray-700 text-center hover:border-orange-400 hover:text-orange-600 transition-all`}
                   >
                     {label}
@@ -133,17 +146,17 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {activeSection === "My Orders" && <MyOrders />}
-       
+        {activeSection === "Orders & Returns" && <MyOrders />}
+
         {activeSection === "Coupons" && <Coupons />}
-     
+
         {activeSection === "PCash" && <PCash />}
         {activeSection === "Profile" && <ProfileSettings />}
         {activeSection === "Saved Cards" && <SavedCards />}
         {activeSection === "Saved UPI" && <SavedUPI />}
         {activeSection === "BNPL / Wallet" && <SavedWallet />}
         {activeSection === "Addresses" && <Addresses />}
-        {activeSection === "Help Desk" && <HelpDeskForm />}
+        {activeSection === "Help Desk" && <HelpDesk />}
         {activeSection === "Delete Account" && <DeleteAccount />}
         {activeSection === "Terms of Use" && <TermsOfUse />}
         {activeSection === "Privacy Policy" && <PrivacyPolicy />}

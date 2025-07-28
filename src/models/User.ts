@@ -57,7 +57,27 @@ const userSchema = new Schema(
     // Metadata
     lastLoginAt: { type: Date },
     loginCount: { type: Number, default: 0 },
+
+        gstDetails: [{
+      number: { 
+        type: String, 
+        uppercase: true,
+        trim: true,
+        validate: {
+          validator: function(v: string) {
+            return /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(v);
+          },
+          message: props => `${props.value} is not a valid GST number!`
+        }
+      },
+      companyName: { type: String, trim: true },
+      verified: { type: Boolean, default: false },
+      verifiedAt: Date,
+      isDefault: { type: Boolean, default: false },
+      createdAt: { type: Date, default: Date.now }
+    }]
   },
+
   {
     timestamps: true,
   }

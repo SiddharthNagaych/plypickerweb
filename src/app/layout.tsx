@@ -1,13 +1,11 @@
-
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
- import { Html, Head, Main, NextScript } from 'next/document';
-
 import { SessionProvider } from "next-auth/react";
 import { CityProvider } from "@/components/home/common/context/CityContext";
 import Navbar from "@/components/home/Navbar";
 import { ReduxProvider } from "@/components/cart/provider/ReduxProvider";
 import { GoogleMapsProvider } from "@/components/home/common/context/GoogleMapsContext";
+
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -19,8 +17,6 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-
-
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -28,29 +24,20 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-         
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        <SessionProvider > 
       
+  
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <SessionProvider>
           <GoogleMapsProvider>
-               <CityProvider>
-            <ReduxProvider >
-               <Navbar/>
-            <div id="portal-root" className="z-[9999]"></div>
-              {children}
-
-            </ReduxProvider>
-             
-          </CityProvider>
-
+            <CityProvider>
+              <ReduxProvider>
+                <Navbar />
+                <div id="portal-root" className="z-[9999]" />
+                {children}
+              </ReduxProvider>
+            </CityProvider>
           </GoogleMapsProvider>
-       
-         
-           </SessionProvider>
-        
-      
+        </SessionProvider>
       </body>
     </html>
   );

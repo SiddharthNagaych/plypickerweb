@@ -21,6 +21,7 @@ const CategorySchema = BaseWithCity.extend({
 
 const SubcategorySchema = BaseWithCity.extend({
   category: z.string(),
+  image: z.string().optional(),
 });
 
 const GroupSchema = BaseWithCity.extend({
@@ -49,14 +50,6 @@ const schemas = {
   brand: BrandSchema.array(),
 };
 
-const models = {
-  category: Category,
-  subcategory: Subcategory,
-  group: Group,
-  subgroup: Subgroup,
-  brand: Brand,
-};
-
 // ----------------- Type Helpers -----------------
 type SchemaTypeMap = {
   category: z.infer<typeof CategorySchema>;
@@ -68,14 +61,75 @@ type SchemaTypeMap = {
 
 type TypeKey = keyof SchemaTypeMap;
 
+// ----------------- Helper Functions -----------------
+async function processCategory(item: SchemaTypeMap["category"]) {
+  await Category.findOneAndUpdate(
+    { name: item.name, city: item.city },
+    item,
+    { upsert: true, new: true }
+  );
+}
 
+async function processSubcategory(item: SchemaTypeMap["subcategory"]) {
+  const processedItem = {
+    ...item,
+    category: new mongoose.Types.ObjectId(item.category),
+  };
+  
+  await Subcategory.findOneAndUpdate(
+    { name: item.name, city: item.city },
+    processedItem,
+    { upsert: true, new: true }
+  );
+}
+
+async function processGroup(item: SchemaTypeMap["group"]) {
+  const processedItem = {
+    ...item,
+    category: new mongoose.Types.ObjectId(item.category),
+    subcategory: new mongoose.Types.ObjectId(item.subcategory),
+  };
+  
+  await Group.findOneAndUpdate(
+    { name: item.name, city: item.city },
+    processedItem,
+    { upsert: true, new: true }
+  );
+}
+
+async function processSubgroup(item: SchemaTypeMap["subgroup"]) {
+  const processedItem = {
+    ...item,
+    category: new mongoose.Types.ObjectId(item.category),
+    subcategory: new mongoose.Types.ObjectId(item.subcategory),
+    group: item.group ? new mongoose.Types.ObjectId(item.group) : undefined,
+  };
+  
+  await Subgroup.findOneAndUpdate(
+    { name: item.name, city: item.city },
+    processedItem,
+    { upsert: true, new: true }
+  );
+}
+
+async function processBrand(item: SchemaTypeMap["brand"]) {
+  const processedItem = {
+    ...item,
+    Category: new mongoose.Types.ObjectId(item.Category),
+  };
+  
+  await Brand.findOneAndUpdate(
+    { Brand_name: item.Brand_name, city: item.city },
+    processedItem,
+    { upsert: true, new: true }
+  );
+}
 
 // ----------------- API Handler -----------------
 export async function POST(req: NextRequest) {
   await mongooseConnect();
 
   const body = await req.json();
-
   const type = body.type as TypeKey;
 
   if (!schemas[type]) {
@@ -84,49 +138,28 @@ export async function POST(req: NextRequest) {
 
   try {
     const parsed = schemas[type].parse(body.items);
-    const Model = models[type];
 
-    for (const raw of parsed) {
-      const itemWithObjectIds: Record<string, unknown> = { ...raw };
-
-      if (type === "subcategory") {
-        const sub = raw as SchemaTypeMap["subcategory"];
-        itemWithObjectIds.category = new mongoose.Types.ObjectId(sub.category);
+    // Process each item based on type
+    for (const item of parsed) {
+      switch (type) {
+        case "category":
+          await processCategory(item as SchemaTypeMap["category"]);
+          break;
+        case "subcategory":
+          await processSubcategory(item as SchemaTypeMap["subcategory"]);
+          break;
+        case "group":
+          await processGroup(item as SchemaTypeMap["group"]);
+          break;
+        case "subgroup":
+          await processSubgroup(item as SchemaTypeMap["subgroup"]);
+          break;
+        case "brand":
+          await processBrand(item as SchemaTypeMap["brand"]);
+          break;
+        default:
+          throw new Error(`Unsupported type: ${type}`);
       }
-
-      if (type === "group") {
-        const group = raw as SchemaTypeMap["group"];
-        itemWithObjectIds.category = new mongoose.Types.ObjectId(group.category);
-        itemWithObjectIds.subcategory = new mongoose.Types.ObjectId(group.subcategory);
-      }
-
-      if (type === "subgroup") {
-        const subgroup = raw as SchemaTypeMap["subgroup"];
-        itemWithObjectIds.category = new mongoose.Types.ObjectId(subgroup.category);
-        itemWithObjectIds.subcategory = new mongoose.Types.ObjectId(subgroup.subcategory);
-        itemWithObjectIds.group = subgroup.group
-          ? new mongoose.Types.ObjectId(subgroup.group)
-          : undefined;
-      }
-
-      if (type === "brand") {
-        const brand = raw as SchemaTypeMap["brand"];
-        itemWithObjectIds.Category = new mongoose.Types.ObjectId(brand.Category);
-      }
-
-      await Model.findOneAndUpdate(
-        type === "brand"
-          ? {
-              Brand_name: (raw as SchemaTypeMap["brand"]).Brand_name,
-              city: (raw as SchemaTypeMap["brand"]).city,
-            }
-          : {
-              name: (raw as SchemaTypeMap["category"] | SchemaTypeMap["subcategory"]).name,
-              city: (raw as SchemaTypeMap["category"] | SchemaTypeMap["subcategory"]).city,
-            },
-        itemWithObjectIds,
-        { upsert: true, new: true }
-      );
     }
 
     return NextResponse.json({ ok: true });

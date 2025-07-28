@@ -2,7 +2,9 @@
 import { NextResponse } from "next/server";
 import { auth } from "../../../../../auth";
 import Coupon from "@/models/Coupon";
-import { Types } from "mongoose";
+
+import { mongooseConnect } from "@/lib/mongooseConnect";
+import User from "@/models/User";
 
 interface FormattedCoupon {
   id: string;
@@ -52,5 +54,66 @@ export async function GET() {
       { error: "Failed to fetch coupons" },
       { status: 500 }
     );
+  }
+}
+
+
+
+export async function POST(req: Request) {
+  const session = await auth();
+  // Uncomment if admin-only access is required
+  // if (!session || session.user.role !== "ADMIN") {
+  //   return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // }
+
+  try {
+    await mongooseConnect();
+    const body = await req.json();
+    const { phoneNumbers, ...rest } = body;
+
+    if (!Array.isArray(phoneNumbers) || phoneNumbers.length === 0) {
+      return NextResponse.json({ error: "Phone numbers required" }, { status: 400 });
+    }
+
+    // Find users by phone numbers
+    const users = await User.find({ phone: { $in: phoneNumbers } }).select("_id");
+    if (users.length === 0) {
+      return NextResponse.json({ error: "No users found for given phone numbers" }, { status: 404 });
+    }
+
+    const assignedTo = users.map((user) => user._id);
+
+    const {
+      code,
+      type,
+      discount,
+      minOrder,
+      validUntil,
+      category,
+      subcategory,
+      group,
+      subgroup,
+    } = rest;
+
+    // Sanitize optional fields
+    const sanitizedCouponData: any = {
+      code,
+      type,
+      discount,
+      minOrder,
+      validUntil: validUntil ? new Date(validUntil) : undefined,
+      assignedTo,
+    };
+    if (category) sanitizedCouponData.category = category;
+    if (subcategory) sanitizedCouponData.subcategory = subcategory;
+    if (group) sanitizedCouponData.group = group;
+    if (subgroup) sanitizedCouponData.subgroup = subgroup;
+
+    const coupon = await Coupon.create(sanitizedCouponData);
+
+    return NextResponse.json({ success: true, coupon });
+  } catch (err: any) {
+    console.error("Coupon Create Error:", err);
+    return NextResponse.json({ error: "Failed to create coupon" }, { status: 500 });
   }
 }
